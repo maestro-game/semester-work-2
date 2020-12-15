@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<GridPane fx:id="gridPane" alignment="CENTER" vgap="5" xmlns="http://javafx.com/javafx/11.0.1"
+          xmlns:fx="http://javafx.com/fxml/1" fx:controller="controllers.EnterController">
+    <columnConstraints>
+        <ColumnConstraints halignment="CENTER" prefWidth="300"/>
+    </columnConstraints>
+
+    <Label fx:id="lHost" text="Адрес сервера" GridPane.rowIndex="0">
+        <GridPane.margin>
+            <Insets top="10.0"/>
+        </GridPane.margin>
+    </Label>
+
+    <TextField fx:id="host" text="127.0.0.1" GridPane.rowIndex="1"/>
+
+    <Label fx:id="lPort" GridPane.rowIndex="2" text="Порт">
+        <GridPane.margin>
+            <Insets top="10.0"/>
+        </GridPane.margin>
+    </Label>
+
+    <TextField fx:id="port" text="9000" GridPane.rowIndex="3"/>
+
+    <Label fx:id="lLogin" GridPane.rowIndex="4" text="Логин">
+        <GridPane.margin>
+            <Insets top="10.0"/>
+        </GridPane.margin>
+    </Label>
+
+    <TextField fx:id="login" GridPane.rowIndex="5"/>
+
+    <Label fx:id="lPassword" GridPane.rowIndex="6" text="Пароль">
+        <GridPane.margin>
+            <Insets top="10.0"/>
+        </GridPane.margin>
+    </Label>
+
+    <PasswordField fx:id="password" GridPane.rowIndex="7" />
+
+    <Label fx:id="lSubmit" GridPane.rowIndex="8">
+        <GridPane.margin>
+            <Insets top="10.0"/>
+        </GridPane.margin>
+    </Label>
+
+    <Button fx:id="submit" text="Войти" GridPane.rowIndex="9"/>
+</GridPane>
