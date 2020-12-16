@@ -12,9 +12,10 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static server.Server.Entry;
-import static server.Server.close;
 
 public class Room extends Thread {
+    private static final double MOVE_PER_TICK = 2;
+
     private static byte[] roomsAsBytes = new byte[]{SignalCode.room.getByte(), 0};
     private static int totalLength = 2;
 
@@ -25,9 +26,15 @@ public class Room extends Thread {
     public AtomicInteger size = new AtomicInteger(0);
     public final byte[] name;
     public final Entry password;
+    //TODO
+    private boolean started;
     public final HashMap<Long, Player> players = new HashMap<>();
     public final Selector selector = Server.getSelector();
-    private byte[] out = new byte[]{SignalCode.game.getByte(), 0};
+    //TODO
+    private byte[] out = new byte[18];
+    {
+        ByteBuffer.wrap(out).put(SignalCode.game.getByte()).put((byte) 0).putDouble(500).putDouble(500);
+    }
 
     public Room(byte id, byte capacity, byte[] name) {
         this(id, capacity, name, null);
@@ -94,18 +101,21 @@ public class Room extends Thread {
                 iterator.remove();
                 if (key.isValid()) {
                     try {
+                        Player player = (Player) ((Server.Attachment) key.attachment()).user;
                         if (key.isReadable()) {
                             SocketChannel channel = ((SocketChannel) key.channel());
                             Server.Attachment attachment = ((Server.Attachment) key.attachment());
                             int amount = channel.read(attachment.in);
                             if (amount < 1) {
                                 if (amount < 0) {
-                                    close(key);
+                                    removeUser(key);
+                                    key.channel().close();
+                                    continue;
                                 }
                                 continue;
                             }
                             System.out.println(Arrays.toString(attachment.in.array()));
-                            switch (attachment.in.position() == 18 ? SignalCode.getCode(attachment.in.get(17)) : SignalCode.getCode(attachment.in.get(0))) {
+                            switch (attachment.in.position() == 2 ? SignalCode.getCode(attachment.in.get(1)) : SignalCode.getCode(attachment.in.get(0))) {
                                 case leaveRoom: {
                                     System.out.println("left room");
                                     removeUser(key);
@@ -119,29 +129,49 @@ public class Room extends Thread {
                                     continue;
                                 }
                             }
-                            if (attachment.in.position() < 17) {
+                            if (attachment.in.position() > 2) {
+                                removeUser(key);
+                                key.channel().close();
                                 continue;
                             }
-                            if (attachment.in.position() > 18) {
-                                close(key);
-                                continue;
-                            }
-                            attachment.in.flip();
-                            attachment.in.position(1);
-                            double x = attachment.in.getDouble();
-                            double y = attachment.in.getDouble();
+
+                            player.direction = attachment.in.get(0);
                             attachment.in.clear();
-                            System.out.println((int) x + " " + (int) y);
-                            //TODO correct out
+                            System.out.println(player.direction);
                             key.interestOps(SelectionKey.OP_WRITE);
-                        } else if (key.isWritable()) {
-                            ((SocketChannel) key.channel()).write(ByteBuffer.wrap(out));
-                            key.interestOps(0);
                         }
+
+                        byte[] bytes = new byte[8];
+                        switch (player.direction) {
+                            case 0:
+                                player.y -= MOVE_PER_TICK;
+                                ByteBuffer.wrap(bytes).putDouble(player.y);
+                                System.arraycopy(bytes, 0, out, player.order * 25 + 34, 8);
+                                break;
+                            case 1:
+                                player.x += MOVE_PER_TICK;
+                                ByteBuffer.wrap(bytes).putDouble(player.x);
+                                System.arraycopy(bytes, 0, out, player.order * 25 + 26, 8);
+                                break;
+                            case 2:
+                                player.y += MOVE_PER_TICK;
+                                ByteBuffer.wrap(bytes).putDouble(player.y);
+                                System.arraycopy(bytes, 0, out, player.order * 25 + 34, 8);
+                                break;
+                            case 3:
+                                player.x -= MOVE_PER_TICK;
+                                ByteBuffer.wrap(bytes).putDouble(player.x);
+                                System.arraycopy(bytes, 0, out, player.order * 25 + 26, 8);
+                        }
+
+                        //always writeable
+                        ((SocketChannel) key.channel()).write(ByteBuffer.wrap(out));
+                        key.interestOps(0);
                     } catch (Exception e) {
                         e.printStackTrace();
                         try {
-                            close(key);
+                            removeUser(key);
+                            key.channel().close();
                         } catch (IOException ignored) {
                         }
                     }
@@ -152,8 +182,7 @@ public class Room extends Thread {
 
     public static boolean attachUser(byte roomId, byte[] password, User user, SocketChannel channel, ByteBuffer byteBuffer, SelectionKey key) throws ClosedChannelException {
         Room room = rooms.get(roomId);
-        if (room == null) return false;
-        if (!room.password.hasSameBytes(password)) return false;
+        if (room == null || room.started || !room.password.hasSameBytes(password)) return false;
         return room.attach(user, channel, byteBuffer, key);
     }
 
@@ -161,18 +190,21 @@ public class Room extends Thread {
         if (size.get() >= capacity) return false;
 
         key.cancel();
+        Player player;
         synchronized (roomsAsBytes) {
             roomsAsBytes[findRoom(id)] = (byte) size.incrementAndGet();
+            player = user.toPlayer(500, 500, (byte) players.size(), this);
+            out = Arrays.copyOf(out, out.length + 25);
+            out[1]++;
+            System.arraycopy(player.asBytes(), 0, out, out.length - 25, 25);
+            players.put(user.id, player);
         }
-        //TODO correct out
-        Player player = user.toPlayer(500, 500, this);
         System.out.println("registering...");
         synchronized (players) {
             players.notify();
         }
         channel.register(selector, SelectionKey.OP_WRITE, new Server.Attachment(byteBuffer, player));
         System.out.println("registered");
-        players.put(user.id, player);
         return true;
     }
 
@@ -180,6 +212,7 @@ public class Room extends Thread {
         synchronized (roomsAsBytes) {
             roomsAsBytes[findRoom(id)]--;
         }
+        //TODO update players order
         //TODO correct out
         size.decrementAndGet();
         key.cancel();

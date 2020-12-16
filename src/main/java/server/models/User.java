@@ -11,7 +11,7 @@ public class User {
         this.password = password;
     }
 
-    public Player toPlayer(double x, double y, Room room) {
-        return new Player(id, name, password, x, y, room);
+    public Player toPlayer(double x, double y, byte order, Room room) {
+        return new Player(id, name, password, x, y, order, room);
     }
 }

@@ -122,11 +122,10 @@ public class Server {
                                 attachment.in.clear();
 
                                 //TODO add full signal code
-                                if (Room.attachUser(login, password, attachment.user, channel, attachment.in, key)) {
-                                    //key.cancel();
-                                } else {
+                                if (!Room.attachUser(login, password, attachment.user, channel, attachment.in, key)) {
                                     channel.write(SignalCode.authError.getBuffer());
                                 }
+
                                 continue;
                             }
 
