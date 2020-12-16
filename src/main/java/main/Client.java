@@ -10,9 +10,8 @@ import models.SignalCode;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
-import java.nio.charset.StandardCharsets;
 
-public class Main extends Application {
+public class Client extends Application {
     public static ByteBuffer out = ByteBuffer.allocate(1024);
     public static ByteBuffer in = ByteBuffer.allocate(1024);
     public static SocketChannel socket;
@@ -26,18 +25,13 @@ public class Main extends Application {
     }
 
     @Override
-    public void stop() throws Exception {
-        try {
-            socket.write(SignalCode.disconnect.getBuffer());
-        } finally {
-            System.out.println("closed");
-            socket.close();
-        }
+    public void stop() {
+        closeSocket();
     }
 
     private static Scene load(String path) {
         try {
-            return new Scene(FXMLLoader.load(Main.class.getClassLoader().getResource(path)));
+            return new Scene(FXMLLoader.load(Client.class.getClassLoader().getResource(path)));
         } catch (IOException e) {
             throw new IllegalArgumentException(e);
         }
@@ -57,7 +51,7 @@ public class Main extends Application {
                 out.clear();
                 out.put(SignalCode.leaveRoom.getByte());
                 flush();
-                Main.switchOnRooms();
+                Client.switchOnRooms();
             }
         });
     }
@@ -81,25 +75,34 @@ public class Main extends Application {
         stage.centerOnScreen();
         rooms.setOnKeyPressed(event -> {
             if (event.getCode() == KeyCode.ESCAPE) {
-                out.clear();
-                out.put(SignalCode.disconnect.getByte());
-                flush();
-                Main.switchOnEnter();
+                closeSocket();
+                Client.switchOnEnter();
             }
         });
     }
 
     public static void flush() {
         try {
+            out.flip();
             socket.write(out);
         } catch (IOException e) {
-            try {
-                socket.close();
-                System.out.println("error during flush in main");
-                switchOnEnter();
-            } catch (IOException ignored) {
-            }
+            closeSocket();
+            System.out.println("error during flush in main");
+            switchOnEnter();
+        }
+    }
 
+    public static void closeSocket() {
+        if (socket != null) {
+            try {
+                socket.write(SignalCode.disconnect.getBuffer());
+            } catch (Exception ignored) {
+            } finally {
+                try {
+                    socket.close();
+                } catch (IOException ignored) {
+                }
+            }
         }
     }
 }

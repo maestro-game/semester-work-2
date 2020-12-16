@@ -114,20 +114,28 @@ public class Server {
                                 continue;
                             }
                             attachment.in.flip();
+                            if (attachment.user != null) {
+                                attachment.in.position(1);
+                                byte login = attachment.in.get();
+                                byte[] password = new byte[attachment.in.remaining()];
+                                attachment.in.get(password);
+                                attachment.in.clear();
+
+                                //TODO add full signal code
+                                if (Room.attachUser(login, password, attachment.user, channel, attachment.in, key)) {
+                                    //key.cancel();
+                                } else {
+                                    channel.write(SignalCode.authError.getBuffer());
+                                }
+                                continue;
+                            }
+
                             attachment.in.position(1);
                             byte[] login = new byte[attachment.in.get()];
                             attachment.in.get(login);
                             byte[] password = new byte[attachment.in.remaining()];
                             attachment.in.get(password);
                             attachment.in.clear();
-                            if (attachment.user != null) {
-                                if (Room.attachUser(login[0], password, attachment.user, channel, attachment.in)) {
-                                    key.cancel();
-                                } else {
-                                    channel.write(SignalCode.authError.getBuffer());
-                                }
-                                continue;
-                            }
 
                             User user = database.get(new Entry(login));
                             if (user == null || !Arrays.equals(password, user.password)) {
@@ -157,7 +165,7 @@ public class Server {
         //TODO
     }
 
-    private static Selector getSelector() {
+    public static Selector getSelector() {
         try {
             return SelectorProvider.provider().openSelector();
         } catch (IOException e) {

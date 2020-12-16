@@ -8,7 +8,6 @@ import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
-import java.nio.channels.spi.SelectorProvider;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -16,8 +15,8 @@ import static server.Server.Entry;
 import static server.Server.close;
 
 public class Room extends Thread {
-    private static byte[] roomsAsBytes = new byte[]{0};
-    private static int totalLength = 1;
+    private static byte[] roomsAsBytes = new byte[]{SignalCode.room.getByte(), 0};
+    private static int totalLength = 2;
 
     private static final TreeMap<Byte, Room> rooms = new TreeMap<>();
 
@@ -27,30 +26,32 @@ public class Room extends Thread {
     public final byte[] name;
     public final Entry password;
     public final HashMap<Long, Player> players = new HashMap<>();
-    public final Selector selector = SelectorProvider.provider().openSelector();
-    private byte[] out = new byte[0];
+    public final Selector selector = Server.getSelector();
+    private byte[] out = new byte[]{SignalCode.game.getByte(), 0};
 
-    public Room(byte id, byte capacity, byte[] name) throws IOException {
+    public Room(byte id, byte capacity, byte[] name) {
         this(id, capacity, name, null);
     }
 
-    public Room(byte id, byte capacity, byte[] name, byte[] password) throws IOException {
+    public Room(byte id, byte capacity, byte[] name, byte[] password) {
         this.id = id;
         this.capacity = capacity;
         this.name = name;
         this.password = password != null ? new Entry(password) : null;
-        synchronized (rooms) {
+        synchronized (roomsAsBytes) {
             rooms.put(id, this);
             totalLength += 5 + name.length;
             roomsAsBytes = generateRoomsAsBytes();
         }
+        this.start();
     }
 
     private static byte[] generateRoomsAsBytes() {
         byte[] result = new byte[totalLength];
-        result[0] = (byte) rooms.size();
+        result[0] = SignalCode.room.getByte();
+        result[1] = (byte) rooms.size();
         Collection<Room> values = rooms.values();
-        int i = 0;
+        int i = 1;
         for (Room room : values) {
             i += 4;
             result[i - 3] = room.id;
@@ -69,7 +70,19 @@ public class Room extends Thread {
 
     @Override
     public void run() {
+        System.out.println("started room");
         while (true) {
+            if (players.size() == 0) {
+                System.out.println("waiting");
+                try {
+                    synchronized (players) {
+                        players.wait();
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                continue;
+            }
             try {
                 if (!(selector.select() > -1)) break;
             } catch (IOException e) {
@@ -115,12 +128,10 @@ public class Room extends Thread {
                             }
                             attachment.in.flip();
                             attachment.in.position(1);
-                            byte[] number = new byte[8];
-                            attachment.in.get(number);
-                            double x = ByteBuffer.wrap(number).getDouble();
-                            attachment.in.get(number);
-                            double y = ByteBuffer.wrap(number).getDouble();
-                            System.out.println((int)x + " " + (int)y);
+                            double x = attachment.in.getDouble();
+                            double y = attachment.in.getDouble();
+                            attachment.in.clear();
+                            System.out.println((int) x + " " + (int) y);
                             //TODO correct out
                             key.interestOps(SelectionKey.OP_WRITE);
                         } else if (key.isWritable()) {
@@ -139,34 +150,40 @@ public class Room extends Thread {
         }
     }
 
-    public static boolean attachUser(byte roomId, byte[] password, User user, SocketChannel channel, ByteBuffer byteBuffer) throws ClosedChannelException {
+    public static boolean attachUser(byte roomId, byte[] password, User user, SocketChannel channel, ByteBuffer byteBuffer, SelectionKey key) throws ClosedChannelException {
         Room room = rooms.get(roomId);
         if (room == null) return false;
         if (!room.password.hasSameBytes(password)) return false;
-        return room.attach(user, channel, byteBuffer);
+        return room.attach(user, channel, byteBuffer, key);
     }
 
-    private boolean attach(User user, SocketChannel channel, ByteBuffer byteBuffer) throws ClosedChannelException {
+    private boolean attach(User user, SocketChannel channel, ByteBuffer byteBuffer, SelectionKey key) throws ClosedChannelException {
         if (size.get() >= capacity) return false;
-        size.incrementAndGet();
-        synchronized (rooms) {
-            roomsAsBytes[findRoom(id)]++;
+
+        key.cancel();
+        synchronized (roomsAsBytes) {
+            roomsAsBytes[findRoom(id)] = (byte) size.incrementAndGet();
         }
         //TODO correct out
         Player player = user.toPlayer(500, 500, this);
-        channel.register(selector, 0, new Server.Attachment(byteBuffer, player));
+        System.out.println("registering...");
+        synchronized (players) {
+            players.notify();
+        }
+        channel.register(selector, SelectionKey.OP_WRITE, new Server.Attachment(byteBuffer, player));
+        System.out.println("registered");
         players.put(user.id, player);
         return true;
     }
 
     private void removeUser(SelectionKey key) {
-        synchronized (rooms) {
+        synchronized (roomsAsBytes) {
             roomsAsBytes[findRoom(id)]--;
         }
         //TODO correct out
         size.decrementAndGet();
         key.cancel();
-        players.remove(((Server.Attachment)key.attachment()).user.id);
+        players.remove(((Server.Attachment) key.attachment()).user.id);
     }
 
     private int findRoom(int key) {
@@ -175,16 +192,16 @@ public class Room extends Thread {
 
         while (low <= high) {
             int mid = (low + high) >>> 1;
-            byte midVal = roomsAsBytes[mid * 4 + 1];
+            byte midVal = roomsAsBytes[mid * 4 + 2];
 
             if (midVal < key)
                 low = mid + 1;
             else if (midVal > key)
                 high = mid - 1;
             else
-                return mid;
+                return mid * 4 + 3;
         }
-        return -(low + 1);
+        return -1;
     }
 
     public static byte[] getAllAsBytes() {

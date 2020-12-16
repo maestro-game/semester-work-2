@@ -1,22 +1,25 @@
 package controllers;
 
 import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
+import javafx.concurrent.Task;
 import javafx.event.Event;
 import javafx.event.EventHandler;
 import javafx.fxml.Initializable;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.input.KeyCode;
-import main.Main;
+import main.Client;
 import models.Room;
+import models.SignalCode;
 
+import java.io.IOException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedList;
 import java.util.Optional;
 import java.util.ResourceBundle;
-import static main.Main.out;
+
+import static main.Client.*;
 
 public class RoomsController implements Initializable {
 
@@ -24,8 +27,10 @@ public class RoomsController implements Initializable {
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
+        out.clear();
         EventHandler<Event> chose = event -> {
             Room room = listView.getSelectionModel().getSelectedItems().get(0);
+            if (room == null) return;
             if (room.isSecured) {
                 TextInputDialog dialog = new TextInputDialog();
                 dialog.setTitle(room.name);
@@ -33,26 +38,62 @@ public class RoomsController implements Initializable {
                 Optional<String> result = dialog.showAndWait();
                 if (result.isPresent()) {
                     byte[] password = result.get().getBytes(StandardCharsets.UTF_8);
-                    out.put((byte) (5 + password.length));
-                    out.putInt(room.id);
+                    out.put((byte) (2 + password.length));
+                    out.put(room.id);
                     out.put(password);
-                    Main.flush();
-                    Main.switchOnGame();
+                    Client.flush();
+                    try {
+                        while (socket.read(in) < 1);
+                    } catch (IOException e) {
+                        //TODO alert
+                    }
+                    switch (SignalCode.getCode(in.get(0))) {
+                        case game:
+                            switchOnGame();
+                            break;
+                        case full:
+                            //TODO alert
+                            break;
+                        case authError:
+                            //TODO alert
+                    }
                 }
             }
         };
-
-        LinkedList<Room> list = new LinkedList<>();
-        list.add(new Room(1, 5, 3, "test1", false));
-        list.add(new Room(2, 5, 3, "test2", true));
-        ObservableList<Room> rooms = FXCollections.observableList(list);
         listView.setOnKeyPressed(event -> {
             if (event.getCode() == KeyCode.ENTER) {
                 chose.handle(event);
             }
         });
         listView.setOnMouseClicked(chose);
-        listView.setItems(rooms);
         listView.requestFocus();
+
+        new Thread(new Task<Void>() {
+            @Override
+            protected Void call() {
+                LinkedList<Room> list = new LinkedList<>();
+                try {
+                    while (in.remaining() < 1) socket.read(in);
+                    byte amount = in.get();
+                    while (in.remaining() < amount * 4) {
+                        socket.read(in);
+                    }
+                    for (int i = 0; i < amount; i++) {
+                        list.add(new Room(in.get(), in.get(), in.get(), null, in.get() == 1));
+                    }
+                    for (Room room : list) {
+                        byte length = in.get();
+                        while (in.remaining() < length) socket.read(in);
+                        room.name = new String(in.array(), in.position(), length);
+                        in.position(in.position() + length);
+                    }
+                } catch (IOException e) {
+                    switchOnEnter();
+                }
+                listView.setItems(FXCollections.observableList(list));
+                in.clear();
+                return null;
+            }
+        }).start();
     }
 }

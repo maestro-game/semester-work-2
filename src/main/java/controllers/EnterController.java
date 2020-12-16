@@ -12,7 +12,7 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.GridPane;
 import javafx.scene.paint.Color;
-import main.Main;
+import main.Client;
 import services.ConnectService;
 
 import java.net.URL;
@@ -34,8 +34,8 @@ public class EnterController implements Initializable, ConnectController {
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-        Main.out.clear();
-        Main.in.clear();
+        Client.out.clear();
+        Client.in.clear();
         ConnectService connectService = new ConnectService();
         EventHandler<Event> eventHandler = event -> {
             try {
@@ -103,8 +103,8 @@ public class EnterController implements Initializable, ConnectController {
     @Override
     public void connected(SocketChannel socket) {
         Platform.runLater(() -> {
-            Main.socket = socket;
-            Main.switchOnRooms();
+            Client.socket = socket;
+            Client.switchOnRooms();
         });
     }
 }

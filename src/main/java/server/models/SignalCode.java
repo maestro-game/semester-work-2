@@ -10,7 +10,7 @@ public enum SignalCode {
     ddosAlert(-128),
     disconnect(-125),
     game(-123),
-    inQueue(-126),
+    full(-126),
     leaveRoom(-124),
     room(-122);
 

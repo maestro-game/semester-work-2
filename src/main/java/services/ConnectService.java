@@ -9,8 +9,7 @@ import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
-import static main.Main.in;
-import static main.Main.out;
+import static main.Client.*;
 
 public class ConnectService {
     private static final int CONNECTION_TIMEOUT = 3_000___000;
@@ -39,27 +38,33 @@ public class ConnectService {
                 out.put(passwordBytes);
                 out.flip();
                 socket.write(out);
-                out.clear();
                 enterController.setMessage("Сервер найден, авторизация...", false);
                 while (socket.read(in) < 1) {
                     if (System.currentTimeMillis() - start > AUTHORISATION_TIMEOUT) {
                         enterController.setMessage("Время ожидания авторизации истекло", true);
+                        closeSocket();
                         return;
                     }
                 }
                 in.flip();
-                if (in.get() == SignalCode.authError.getByte()) {
-                    enterController.setMessage("Неверный логин или пароль", true);
-                    socket.close();
-                    in.clear();
-                    return;
+                switch (SignalCode.getCode(in.get())) {
+                    case authError:
+                        enterController.setMessage("Неверный логин или пароль", true);
+                        closeSocket();
+                        in.clear();
+                        break;
+                    case room:
+                        System.out.println(Arrays.toString(in.array()));
+                        enterController.connected(socket);
+                        break;
+                    default:
+                        enterController.setMessage("Сервер ответил не по понятиям", true);
+                        closeSocket();
+                        in.clear();
                 }
-                System.out.println(Arrays.toString(in.array()));
-                //TODO maybe extra
-                in.clear();
-                enterController.connected(socket);
             } catch (IOException e) {
                 enterController.setMessage("Не удалось подключится к серверу", true);
+                closeSocket();
             }
         }).start();
     }
