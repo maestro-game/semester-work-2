@@ -1,7 +1,9 @@
 package controllers;
 
+import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.fxml.Initializable;
+import javafx.scene.control.ListView;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
@@ -10,7 +12,7 @@ import models.SignalCode;
 
 import java.io.IOException;
 import java.net.URL;
-import java.util.Arrays;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.ResourceBundle;
 
@@ -18,18 +20,24 @@ import static main.Client.*;
 
 public class GameController implements Initializable {
     public static final int RADIUS = 10;
+    public static ByteBuffer direction = ByteBuffer.allocate(1);
+    public Thread game;
 
     public Pane pane;
+    public ListView<Player> list;
+    public Circle coin = new Circle(100, 100, 5, Color.GOLD);
 
     HashMap<Long, Player> players = new HashMap<>();
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-        new Thread(new Task<Void>() {
+        pane.getChildren().add(coin);
+        pane.getChildren().add(new Circle(500, 498, RADIUS, Color.rgb(0, 250, 0)));
+        game = new Thread(new Task<Void>() {
             @Override
             protected Void call() {
                 try {
-                    while (true) {
+                    while (!game.isInterrupted()) {
                         while (in.position() < 2) {
                             socket.read(in);
                         }
@@ -41,18 +49,19 @@ public class GameController implements Initializable {
                         while (in.position() < amount * 25 + 18) {
                             socket.read(in);
                         }
-                        System.out.println(Arrays.toString(in.array()));
                         in.flip();
                         in.position(2);
+                        coin.setCenterX(in.getDouble());
+                        coin.setCenterY(in.getDouble());
                         for (int i = 0; i < amount; i++) {
                             Long id = in.getLong();
                             Player player = players.get(id);
                             if (player == null) {
                                 Circle circle = new Circle(in.getDouble(), in.getDouble(), RADIUS,
                                         //TODO generate random colors
-                                        Color.rgb(0, 250, 0));
+                                        Color.rgb(0, (int) (100*(id)), 0));
                                 players.put(id, new Player(id, circle.getCenterX(), circle.getCenterY(), in.get(), circle));
-                                pane.getChildren().add(circle);
+                                Platform.runLater(() -> pane.getChildren().add(circle));
                             } else {
                                 player = players.get(id);
                                 player.x = in.getDouble();
@@ -63,7 +72,9 @@ public class GameController implements Initializable {
                             }
                         }
                         in.clear();
+                        socket.write(direction);
                     }
+                    return null;
                 } catch (IOException e) {
                     e.printStackTrace();
                     switchOnEnter();
@@ -71,6 +82,6 @@ public class GameController implements Initializable {
                 }
             }
         });
-
+        game.start();
     }
 }

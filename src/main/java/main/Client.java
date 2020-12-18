@@ -1,5 +1,6 @@
 package main;
 
+import controllers.GameController;
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
@@ -38,7 +39,7 @@ public class Client extends Application {
     }
 
     public static void switchOnGame() {
-        stage.setWidth(1000);
+        stage.setWidth(1300);
         stage.setHeight(1000);
         stage.setResizable(true);
         stage.setTitle("Game");
@@ -46,12 +47,25 @@ public class Client extends Application {
         stage.setScene(game);
         stage.centerOnScreen();
         game.setOnKeyPressed(event -> {
-            if (event.getCode() == KeyCode.ESCAPE) {
-                in.clear();
-                out.clear();
-                out.put(SignalCode.leaveRoom.getByte());
-                flush();
-                Client.switchOnRooms();
+            switch (event.getCode()) {
+                case ENTER:
+                    in.clear();
+                    out.clear();
+                    out.put(SignalCode.leaveRoom.getByte());
+                    flush();
+                    Client.switchOnRooms();
+                    break;
+                case UP:
+                    GameController.direction.put(0, (byte) 0);
+                    break;
+                case DOWN:
+                    GameController.direction.put(0, (byte) 2);
+                    break;
+                case LEFT:
+                    GameController.direction.put(0, (byte) 3);
+                    break;
+                case RIGHT:
+                    GameController.direction.put(0, (byte) 1);
             }
         });
     }

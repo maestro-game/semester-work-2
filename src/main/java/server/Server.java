@@ -50,6 +50,7 @@ public class Server {
 
     static {
         database.put(new Entry("vadim".getBytes(StandardCharsets.UTF_8)), new User(1, "vadim".getBytes(StandardCharsets.UTF_8), "pass".getBytes(StandardCharsets.UTF_8)));
+        database.put(new Entry("test1".getBytes(StandardCharsets.UTF_8)), new User(1, "test1".getBytes(StandardCharsets.UTF_8), "pass".getBytes(StandardCharsets.UTF_8)));
     }
 
     public final static String HOST = "127.0.0.1";
@@ -104,7 +105,6 @@ public class Server {
                                 }
                                 continue;
                             }
-                            System.out.println(Arrays.toString(attachment.in.array()));
                             byte messageLen = attachment.in.get(0);
                             if (attachment.in.position() < messageLen) {
                                 continue;

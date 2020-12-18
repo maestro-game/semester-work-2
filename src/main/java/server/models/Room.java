@@ -15,6 +15,7 @@ import static server.Server.Entry;
 
 public class Room extends Thread {
     private static final double MOVE_PER_TICK = 2;
+    private static final long TICK_DELAY = 500;
 
     private static byte[] roomsAsBytes = new byte[]{SignalCode.room.getByte(), 0};
     private static int totalLength = 2;
@@ -28,11 +29,11 @@ public class Room extends Thread {
     public final Entry password;
     //TODO
     private boolean started;
+    private final AtomicInteger attaching = new AtomicInteger(0);
     public final HashMap<Long, Player> players = new HashMap<>();
     public final Selector selector = Server.getSelector();
     //TODO
-    private byte[] out = new byte[18];
-    {
+    private byte[] out = new byte[18];{
         ByteBuffer.wrap(out).put(SignalCode.game.getByte()).put((byte) 0).putDouble(500).putDouble(500);
     }
 
@@ -79,7 +80,7 @@ public class Room extends Thread {
     public void run() {
         System.out.println("started room");
         while (true) {
-            if (players.size() == 0) {
+            if (attaching.get() != 0 || players.size() == 0) {
                 System.out.println("waiting");
                 try {
                     synchronized (players) {
@@ -95,6 +96,7 @@ public class Room extends Thread {
             } catch (IOException e) {
                 e.printStackTrace();
             }
+            long start = System.currentTimeMillis();
             Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
             while (iterator.hasNext()) {
                 SelectionKey key = iterator.next();
@@ -114,7 +116,6 @@ public class Room extends Thread {
                                 }
                                 continue;
                             }
-                            System.out.println(Arrays.toString(attachment.in.array()));
                             switch (attachment.in.position() == 2 ? SignalCode.getCode(attachment.in.get(1)) : SignalCode.getCode(attachment.in.get(0))) {
                                 case leaveRoom: {
                                     System.out.println("left room");
@@ -166,7 +167,6 @@ public class Room extends Thread {
 
                         //always writeable
                         ((SocketChannel) key.channel()).write(ByteBuffer.wrap(out));
-                        key.interestOps(0);
                     } catch (Exception e) {
                         e.printStackTrace();
                         try {
@@ -176,6 +176,10 @@ public class Room extends Thread {
                         }
                     }
                 }
+            }
+            try {
+                Thread.sleep(start + TICK_DELAY - System.currentTimeMillis());
+            } catch (Exception ignored) {
             }
         }
     }
@@ -200,10 +204,13 @@ public class Room extends Thread {
             players.put(user.id, player);
         }
         System.out.println("registering...");
+        attaching.incrementAndGet();
         synchronized (players) {
-            players.notify();
+            channel.register(selector, SelectionKey.OP_WRITE, new Server.Attachment(byteBuffer, player));
+            if (attaching.decrementAndGet() == 0) {
+                players.notify();
+            }
         }
-        channel.register(selector, SelectionKey.OP_WRITE, new Server.Attachment(byteBuffer, player));
         System.out.println("registered");
         return true;
     }
