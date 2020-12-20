@@ -12,8 +12,8 @@ import java.util.Arrays;
 import static main.Client.*;
 
 public class ConnectService {
-    private static final int CONNECTION_TIMEOUT = 3_000___000;
-    private static final int AUTHORISATION_TIMEOUT = 3_000___000;
+    private static final int CONNECTION_TIMEOUT = 3_000;
+    private static final int AUTHORISATION_TIMEOUT = 3_000;
 
     public void connect(ConnectController enterController, String host, int port, String login, String password) {
         new Thread(() -> {
@@ -58,7 +58,7 @@ public class ConnectService {
                         enterController.connected(socket);
                         break;
                     default:
-                        enterController.setMessage("Сервер ответил не по понятиям", true);
+                        enterController.setMessage("Сервер ответил неправильным сообщением", true);
                         closeSocket();
                         in.clear();
                 }

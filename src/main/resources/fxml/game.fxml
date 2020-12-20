@@ -3,11 +3,14 @@
 <?import javafx.scene.control.ListView?>
 <?import javafx.scene.layout.*?>
 <GridPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml" fx:controller="controllers.GameController"
-          prefHeight="400.0" prefWidth="600.0">
+          prefHeight="400.0" prefWidth="600.0" fx:id="gridPane">
     <columnConstraints>
         <ColumnConstraints hgrow="ALWAYS"/>
-        <ColumnConstraints maxWidth="300" prefWidth="300"/>
+        <ColumnConstraints maxWidth="300" minWidth="300"/>
     </columnConstraints>
-    <Pane GridPane.columnIndex="0" fx:id="pane"/>
-    <ListView GridPane.columnIndex="1" fx:id="list"/>
+    <rowConstraints>
+        <RowConstraints vgrow="ALWAYS"/>
+    </rowConstraints>
+    <Pane GridPane.columnIndex="0" GridPane.rowIndex="0" fx:id="pane"/>
+    <ListView GridPane.columnIndex="1" GridPane.rowIndex="0" fx:id="list"/>
 </GridPane>

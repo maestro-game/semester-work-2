@@ -5,6 +5,7 @@ import javafx.concurrent.Task;
 import javafx.event.Event;
 import javafx.event.EventHandler;
 import javafx.fxml.Initializable;
+import javafx.scene.control.Alert;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.input.KeyCode;
@@ -41,28 +42,48 @@ public class RoomsController implements Initializable {
                     out.put((byte) (2 + password.length));
                     out.put(room.id);
                     out.put(password);
-                    Client.flush();
-                    try {
-                        while (socket.read(in) < 1);
-                    } catch (IOException e) {
-                        //TODO alert
-                    }
-                    switch (SignalCode.getCode(in.get(0))) {
-                        case game:
-                            switchOnGame();
-                            break;
-                        case full:
-                            //TODO alert
-                            break;
-                        case authError:
-                            //TODO alert
-                    }
                 }
+            } else {
+                out.put((byte) 2);
+                out.put(room.id);
+            }
+
+            Client.flush();
+            try {
+                while (socket.read(in) < 1) ;
+            } catch (IOException e) {
+                closeSocket();
+                Client.switchOnEnter();
+            }
+            String message = null;
+            switch (SignalCode.getCode(in.get(0))) {
+                case game:
+                    switchOnGame();
+                    break;
+                case full:
+                    message = "Комната полная";
+                    break;
+                case authError:
+                    message = "Неверный пароль";
+                    break;
+                default:
+                    message = "Сервер ответил неправильным сообщением";
+            }
+            if (message != null) {
+                Alert alert = new Alert(Alert.AlertType.WARNING);
+                alert.setTitle("Не удалось подключиться к комнате");
+                alert.setHeaderText(null);
+                alert.setContentText(message);
+                alert.showAndWait();
             }
         };
         listView.setOnKeyPressed(event -> {
             if (event.getCode() == KeyCode.ENTER) {
                 chose.handle(event);
+            }
+            if (event.getCode() == KeyCode.DELETE) {
+                closeSocket();
+                Client.switchOnEnter();
             }
         });
         listView.setOnMouseClicked(chose);

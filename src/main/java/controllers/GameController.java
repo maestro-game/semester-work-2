@@ -4,9 +4,11 @@ import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.fxml.Initializable;
 import javafx.scene.control.ListView;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
+import main.Client;
 import models.Player;
 import models.SignalCode;
 
@@ -19,20 +21,44 @@ import java.util.ResourceBundle;
 import static main.Client.*;
 
 public class GameController implements Initializable {
-    public static final int RADIUS = 10;
-    public static ByteBuffer direction = ByteBuffer.allocate(1);
+    public static final double PLAYER_RADIUS = 10;
+    public static final double COIN_RADIUS = 5;
+    public static byte[] direction = new byte[]{0};
     public Thread game;
 
+    public GridPane gridPane;
     public Pane pane;
     public ListView<Player> list;
-    public Circle coin = new Circle(100, 100, 5, Color.GOLD);
+    public Circle coin = new Circle(100, 100, COIN_RADIUS, Color.GOLD);
 
     HashMap<Long, Player> players = new HashMap<>();
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
+        gridPane.setOnKeyPressed(event -> {
+            switch (event.getCode()) {
+                case DELETE:
+                    game.interrupt();
+                    in.clear();
+                    out.clear();
+                    out.put(SignalCode.leaveRoom.getByte());
+                    flush();
+                    Client.switchOnRooms();
+                    break;
+                case W:
+                    GameController.direction[0] = 0;
+                    break;
+                case S:
+                    GameController.direction[0] = 2;
+                    break;
+                case A:
+                    GameController.direction[0] = 3;
+                    break;
+                case D:
+                    GameController.direction[0] = 1;
+            }
+        });
         pane.getChildren().add(coin);
-        pane.getChildren().add(new Circle(500, 498, RADIUS, Color.rgb(0, 250, 0)));
         game = new Thread(new Task<Void>() {
             @Override
             protected Void call() {
@@ -57,7 +83,7 @@ public class GameController implements Initializable {
                             Long id = in.getLong();
                             Player player = players.get(id);
                             if (player == null) {
-                                Circle circle = new Circle(in.getDouble(), in.getDouble(), RADIUS,
+                                Circle circle = new Circle(in.getDouble(), in.getDouble(), PLAYER_RADIUS,
                                         //TODO generate random colors
                                         Color.rgb(0, (int) (100*(id)), 0));
                                 players.put(id, new Player(id, circle.getCenterX(), circle.getCenterY(), in.get(), circle));
@@ -72,10 +98,11 @@ public class GameController implements Initializable {
                             }
                         }
                         in.clear();
-                        socket.write(direction);
+                        socket.write(ByteBuffer.wrap(direction));
                     }
                     return null;
                 } catch (IOException e) {
+                    game.interrupt();
                     e.printStackTrace();
                     switchOnEnter();
                     return null;

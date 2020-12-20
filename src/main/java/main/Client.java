@@ -46,28 +46,6 @@ public class Client extends Application {
         Scene game = load("fxml/game.fxml");
         stage.setScene(game);
         stage.centerOnScreen();
-        game.setOnKeyPressed(event -> {
-            switch (event.getCode()) {
-                case ENTER:
-                    in.clear();
-                    out.clear();
-                    out.put(SignalCode.leaveRoom.getByte());
-                    flush();
-                    Client.switchOnRooms();
-                    break;
-                case UP:
-                    GameController.direction.put(0, (byte) 0);
-                    break;
-                case DOWN:
-                    GameController.direction.put(0, (byte) 2);
-                    break;
-                case LEFT:
-                    GameController.direction.put(0, (byte) 3);
-                    break;
-                case RIGHT:
-                    GameController.direction.put(0, (byte) 1);
-            }
-        });
     }
 
     public static void switchOnEnter() {
@@ -87,12 +65,6 @@ public class Client extends Application {
         Scene rooms = load("fxml/rooms.fxml");
         stage.setScene(rooms);
         stage.centerOnScreen();
-        rooms.setOnKeyPressed(event -> {
-            if (event.getCode() == KeyCode.ESCAPE) {
-                closeSocket();
-                Client.switchOnEnter();
-            }
-        });
     }
 
     public static void flush() {

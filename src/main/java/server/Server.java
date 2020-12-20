@@ -7,10 +7,7 @@ import server.models.User;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
+import java.nio.channels.*;
 import java.nio.channels.spi.SelectorProvider;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -75,8 +72,8 @@ public class Server {
 
     public static void main(String[] args) throws IOException {
         //TODO initialise rooms by other way
-        new Room((byte)1, (byte)10, "test1".getBytes(StandardCharsets.UTF_8));
-        new Room((byte)10, (byte)3, "test2".getBytes(StandardCharsets.UTF_8), "pass".getBytes(StandardCharsets.UTF_8));
+        new Room((byte) 1, (byte) 10, "test1".getBytes(StandardCharsets.UTF_8));
+        new Room((byte) 10, (byte) 3, "test2".getBytes(StandardCharsets.UTF_8), "pass".getBytes(StandardCharsets.UTF_8));
 
         ServerSocketChannel serverSocket = ServerSocketChannel.open();
         serverSocket.socket().bind(new InetSocketAddress(HOST, PORT), CONNECTION_QUEUE);
@@ -121,9 +118,9 @@ public class Server {
                                 attachment.in.get(password);
                                 attachment.in.clear();
 
-                                //TODO add full signal code
-                                if (!Room.attachUser(login, password, attachment.user, channel, attachment.in, key)) {
-                                    channel.write(SignalCode.authError.getBuffer());
+                                SignalCode code;
+                                if ((code = Room.attachUser(login, password, attachment.user, channel, attachment.in, key)) != SignalCode.game) {
+                                    channel.write(code.getBuffer());
                                 }
 
                                 continue;
@@ -160,8 +157,10 @@ public class Server {
         System.out.println("closed");
     }
 
-    public static void attachToLobby(User user, SocketChannel socketChannel, ByteBuffer byteBuffer) {
-        //TODO
+    public static void attachToLobby(User user, SocketChannel socketChannel, ByteBuffer byteBuffer) throws ClosedChannelException {
+        //TODO check if needs wait/notify to register
+        socketChannel.register(selector, SelectionKey.OP_READ, new Attachment(byteBuffer, user));
+        System.out.println("accepted to lobby");
     }
 
     public static Selector getSelector() {

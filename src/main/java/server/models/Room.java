@@ -14,8 +14,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static server.Server.Entry;
 
 public class Room extends Thread {
-    private static final double MOVE_PER_TICK = 2;
-    private static final long TICK_DELAY = 500;
+    private static final double MOVE_PER_TICK = 5;
+    private static final long TICK_DELAY = 100;
+    private static final double COIN_PLUS_PLAYER_RADIUS = 5 + 10;
+    private static final double FIELD_WIDTH = 1000;
+    private static final double FIELD_HEIGHT = 1000;
+    private static final byte WIN_AMOUNT = 10;
+
 
     private static byte[] roomsAsBytes = new byte[]{SignalCode.room.getByte(), 0};
     private static int totalLength = 2;
@@ -27,15 +32,15 @@ public class Room extends Thread {
     public AtomicInteger size = new AtomicInteger(0);
     public final byte[] name;
     public final Entry password;
-    //TODO
-    private boolean started;
     private final AtomicInteger attaching = new AtomicInteger(0);
     public final HashMap<Long, Player> players = new HashMap<>();
     public final Selector selector = Server.getSelector();
-    //TODO
-    private byte[] out = new byte[18];{
-        ByteBuffer.wrap(out).put(SignalCode.game.getByte()).put((byte) 0).putDouble(500).putDouble(500);
-    }
+
+    private boolean close = false;
+    private Player winner = null;
+    private double coinX = 500;
+    private double coinY = 500;
+    private byte[] out = generateOut();
 
     public Room(byte id, byte capacity, byte[] name) {
         this(id, capacity, name, null);
@@ -79,7 +84,7 @@ public class Room extends Thread {
     @Override
     public void run() {
         System.out.println("started room");
-        while (true) {
+        while (!interrupted()) {
             if (attaching.get() != 0 || players.size() == 0) {
                 System.out.println("waiting");
                 try {
@@ -98,36 +103,38 @@ public class Room extends Thread {
             }
             long start = System.currentTimeMillis();
             Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
+            if (close) {
+                writeClose(iterator);
+                interrupt();
+                break;
+            }
             while (iterator.hasNext()) {
                 SelectionKey key = iterator.next();
                 iterator.remove();
                 if (key.isValid()) {
                     try {
                         Player player = (Player) ((Server.Attachment) key.attachment()).user;
-                        if (key.isReadable()) {
-                            SocketChannel channel = ((SocketChannel) key.channel());
-                            Server.Attachment attachment = ((Server.Attachment) key.attachment());
-                            int amount = channel.read(attachment.in);
-                            if (amount < 1) {
-                                if (amount < 0) {
-                                    removeUser(key);
-                                    key.channel().close();
-                                    continue;
-                                }
-                                continue;
-                            }
-                            switch (attachment.in.position() == 2 ? SignalCode.getCode(attachment.in.get(1)) : SignalCode.getCode(attachment.in.get(0))) {
-                                case leaveRoom: {
-                                    System.out.println("left room");
-                                    removeUser(key);
-                                    Server.attachToLobby(attachment.user, channel, attachment.in);
-                                    continue;
-                                }
-                                case disconnect: {
-                                    System.out.println("closed by room");
-                                    removeUser(key);
-                                    key.channel().close();
-                                    continue;
+                        SocketChannel channel = ((SocketChannel) key.channel());
+                        Server.Attachment attachment = ((Server.Attachment) key.attachment());
+                        int amount = channel.read(attachment.in);
+
+                        if (amount > 0) {
+                            //reading
+                            SignalCode code = SignalCode.getCode(attachment.in.position() == 2 ? attachment.in.get(1) : attachment.in.get(0));
+                            if (code != null) {
+                                switch (code) {
+                                    case leaveRoom: {
+                                        System.out.println("left room");
+                                        removeUser(key);
+                                        Server.attachToLobby(attachment.user, channel, attachment.in);
+                                        continue;
+                                    }
+                                    case disconnect: {
+                                        System.out.println("closed by room");
+                                        removeUser(key);
+                                        key.channel().close();
+                                        continue;
+                                    }
                                 }
                             }
                             if (attachment.in.position() > 2) {
@@ -138,8 +145,13 @@ public class Room extends Thread {
 
                             player.direction = attachment.in.get(0);
                             attachment.in.clear();
-                            System.out.println(player.direction);
                             key.interestOps(SelectionKey.OP_WRITE);
+                        } else {
+                            if (amount < 0) {
+                                removeUser(key);
+                                key.channel().close();
+                                continue;
+                            }
                         }
 
                         byte[] bytes = new byte[8];
@@ -164,9 +176,17 @@ public class Room extends Thread {
                                 ByteBuffer.wrap(bytes).putDouble(player.x);
                                 System.arraycopy(bytes, 0, out, player.order * 25 + 26, 8);
                         }
-
+                        if (coinIsPicked(player)) {
+                            if (player.score == WIN_AMOUNT) {
+                                close = true;
+                                winner = player;
+                                break;
+                            }
+                            out[player.order * 25 + 42] = ++player.score;
+                            generateCoin();
+                        }
                         //always writeable
-                        ((SocketChannel) key.channel()).write(ByteBuffer.wrap(out));
+                        channel.write(ByteBuffer.wrap(out));
                     } catch (Exception e) {
                         e.printStackTrace();
                         try {
@@ -182,22 +202,75 @@ public class Room extends Thread {
             } catch (Exception ignored) {
             }
         }
+        System.out.println("closed room");
     }
 
-    public static boolean attachUser(byte roomId, byte[] password, User user, SocketChannel channel, ByteBuffer byteBuffer, SelectionKey key) throws ClosedChannelException {
+    public void closeRoom() {
+        close = true;
+    }
+
+    public void writeClose(Iterator<SelectionKey> iterator) {
+        byte[] message;
+        if (winner != null) {
+            message = new byte[2 + winner.name.length];
+            message[0] = SignalCode.checkAlive.getByte();
+            message[1] = (byte) winner.name.length;
+            System.arraycopy(winner.name, 0, message, 2, winner.name.length);
+        } else {
+            message = new byte[]{SignalCode.leaveRoom.getByte()};
+        }
+
+        while (iterator.hasNext()) {
+            SelectionKey key = iterator.next();
+            iterator.remove();
+            if (key.isValid()) {
+                SocketChannel channel = ((SocketChannel) key.channel());
+                try {
+                    channel.write(ByteBuffer.wrap(message));
+                    Server.Attachment attachment = (Server.Attachment)key.attachment();
+                    Server.attachToLobby(attachment.user, channel, attachment.in);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    private double sqr(double a) {
+        return a*a;
+    }
+
+    private boolean coinIsPicked(Player player) {
+        return Math.sqrt(sqr(player.x - coinX) + sqr(player.y - coinY)) < COIN_PLUS_PLAYER_RADIUS;
+    }
+
+    private void generateCoin() {
+        synchronized (roomsAsBytes) {
+            coinX = Math.random() * FIELD_WIDTH;
+            coinY = Math.random() * FIELD_HEIGHT;
+            byte[] bytes = new byte[8];
+            ByteBuffer.wrap(bytes).putDouble(coinX);
+            System.arraycopy(bytes, 0, out, 2, 8);
+            ByteBuffer.wrap(bytes).putDouble(coinY);
+            System.arraycopy(bytes, 0, out, 10, 8);
+        }
+    }
+
+    public static SignalCode attachUser(byte roomId, byte[] password, User user, SocketChannel channel, ByteBuffer byteBuffer, SelectionKey key) throws ClosedChannelException {
         Room room = rooms.get(roomId);
-        if (room == null || room.started || !room.password.hasSameBytes(password)) return false;
+        if (room == null) return SignalCode.leaveRoom;
+        if (!room.password.hasSameBytes(password)) return SignalCode.authError;
         return room.attach(user, channel, byteBuffer, key);
     }
 
-    private boolean attach(User user, SocketChannel channel, ByteBuffer byteBuffer, SelectionKey key) throws ClosedChannelException {
-        if (size.get() >= capacity) return false;
+    private SignalCode attach(User user, SocketChannel channel, ByteBuffer byteBuffer, SelectionKey key) throws ClosedChannelException {
+        if (size.get() >= capacity) return SignalCode.full;
 
         key.cancel();
         Player player;
         synchronized (roomsAsBytes) {
             roomsAsBytes[findRoom(id)] = (byte) size.incrementAndGet();
-            player = user.toPlayer(500, 500, (byte) players.size(), this);
+            player = user.toPlayer(500, 500, (byte) (size.get() - 1), this);
             out = Arrays.copyOf(out, out.length + 25);
             out[1]++;
             System.arraycopy(player.asBytes(), 0, out, out.length - 25, 25);
@@ -206,24 +279,38 @@ public class Room extends Thread {
         System.out.println("registering...");
         attaching.incrementAndGet();
         synchronized (players) {
-            channel.register(selector, SelectionKey.OP_WRITE, new Server.Attachment(byteBuffer, player));
+            channel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE, new Server.Attachment(byteBuffer, player));
             if (attaching.decrementAndGet() == 0) {
                 players.notify();
             }
         }
         System.out.println("registered");
-        return true;
+        return SignalCode.game;
+    }
+
+    private byte[] generateOut() {
+        synchronized (roomsAsBytes) {
+            byte[] result = new byte[18 + 25 * size.get()];
+            ByteBuffer buffer = ByteBuffer.wrap(result).put(SignalCode.game.getByte()).put((byte) size.get()).putDouble(coinX).putDouble(coinY);
+            for (Player player : players.values()) {
+                buffer.putDouble(player.id).putDouble(player.x).putDouble(player.y).put(player.score);
+            }
+            return result;
+        }
     }
 
     private void removeUser(SelectionKey key) {
+        key.cancel();
+        size.decrementAndGet();
         synchronized (roomsAsBytes) {
             roomsAsBytes[findRoom(id)]--;
+            players.remove(((Server.Attachment) key.attachment()).user.id);
+            byte i = 0;
+            for (Player player : players.values()) {
+                player.order = i++;
+            }
+            out = generateOut();
         }
-        //TODO update players order
-        //TODO correct out
-        size.decrementAndGet();
-        key.cancel();
-        players.remove(((Server.Attachment) key.attachment()).user.id);
     }
 
     private int findRoom(int key) {
