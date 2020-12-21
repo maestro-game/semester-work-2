@@ -15,6 +15,7 @@ import models.SignalCode;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.ResourceBundle;
 
@@ -30,6 +31,7 @@ public class GameController implements Initializable {
     public Pane pane;
     public ListView<Player> list;
     public Circle coin = new Circle(100, 100, COIN_RADIUS, Color.GOLD);
+    private byte interrupted;
 
     HashMap<Long, Player> players = new HashMap<>();
 
@@ -38,12 +40,7 @@ public class GameController implements Initializable {
         gridPane.setOnKeyPressed(event -> {
             switch (event.getCode()) {
                 case DELETE:
-                    game.interrupt();
-                    in.clear();
-                    out.clear();
-                    out.put(SignalCode.leaveRoom.getByte());
-                    flush();
-                    Client.switchOnRooms();
+                    interrupted = 1;
                     break;
                 case W:
                     GameController.direction[0] = 0;
@@ -64,13 +61,30 @@ public class GameController implements Initializable {
             protected Void call() {
                 try {
                     while (!game.isInterrupted()) {
+                        if (interrupted == 2) {
+                            in.flip();
+                            do {
+                                if (in.remaining() == 0) {
+                                    in.clear();
+                                    do {
+                                        socket.read(in);
+                                    } while (in.position() == 0);
+                                    in.flip();
+                                    System.out.println("after flip in loop");
+                                    System.out.println(Arrays.toString(in.array()));
+                                }
+                            } while (in.get() != SignalCode.room.getByte());
+                            game.interrupt();
+                            Platform.runLater(Client::switchOnRooms);
+                            break;
+                        }
                         while (in.position() < 2) {
                             socket.read(in);
                         }
                         //TODO may be extra
-                        switch (SignalCode.getCode(in.get(0))) {
-                            default:
-                        }
+//                        switch (SignalCode.getCode(in.get(0))) {
+//                            default:
+//                        }
                         int amount = in.get(1);
                         while (in.position() < amount * 25 + 18) {
                             socket.read(in);
@@ -85,7 +99,7 @@ public class GameController implements Initializable {
                             if (player == null) {
                                 Circle circle = new Circle(in.getDouble(), in.getDouble(), PLAYER_RADIUS,
                                         //TODO generate random colors
-                                        Color.rgb(0, (int) (100*(id)), 0));
+                                        Color.rgb(0, (int) (100 * (id)), 0));
                                 players.put(id, new Player(id, circle.getCenterX(), circle.getCenterY(), in.get(), circle));
                                 Platform.runLater(() -> pane.getChildren().add(circle));
                             } else {
@@ -98,11 +112,17 @@ public class GameController implements Initializable {
                             }
                         }
                         in.clear();
-                        socket.write(ByteBuffer.wrap(direction));
+                        if (interrupted != 0) {
+                            if (interrupted == 1) {
+                                socket.write(SignalCode.leaveRoom.getBuffer());
+                                interrupted = 2;
+                            }
+                        } else {
+                            socket.write(ByteBuffer.wrap(direction));
+                        }
                     }
                     return null;
                 } catch (IOException e) {
-                    game.interrupt();
                     e.printStackTrace();
                     switchOnEnter();
                     return null;

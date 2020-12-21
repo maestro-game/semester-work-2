@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static server.Server.Entry;
 
 public class Room extends Thread {
-    private static final double MOVE_PER_TICK = 5;
+    private static final double MOVE_PER_TICK = 1;
     private static final long TICK_DELAY = 100;
     private static final double COIN_PLUS_PLAYER_RADIUS = 5 + 10;
     private static final double FIELD_WIDTH = 1000;
@@ -86,6 +86,13 @@ public class Room extends Thread {
         System.out.println("started room");
         while (!interrupted()) {
             if (attaching.get() != 0 || players.size() == 0) {
+                if (players.size() == 0) {
+                    try {
+                        selector.select(1);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
                 System.out.println("waiting");
                 try {
                     synchronized (players) {
@@ -126,6 +133,7 @@ public class Room extends Thread {
                                     case leaveRoom: {
                                         System.out.println("left room");
                                         removeUser(key);
+                                        attachment.in.clear();
                                         Server.attachToLobby(attachment.user, channel, attachment.in);
                                         continue;
                                     }
@@ -259,7 +267,7 @@ public class Room extends Thread {
     public static SignalCode attachUser(byte roomId, byte[] password, User user, SocketChannel channel, ByteBuffer byteBuffer, SelectionKey key) throws ClosedChannelException {
         Room room = rooms.get(roomId);
         if (room == null) return SignalCode.leaveRoom;
-        if (!room.password.hasSameBytes(password)) return SignalCode.authError;
+        if (room.password != null && !room.password.hasSameBytes(password)) return SignalCode.authError;
         return room.attach(user, channel, byteBuffer, key);
     }
 

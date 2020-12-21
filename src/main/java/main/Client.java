@@ -1,10 +1,8 @@
 package main;
 
-import controllers.GameController;
 import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
-import javafx.scene.input.KeyCode;
 import javafx.stage.Stage;
 import models.SignalCode;
 
@@ -43,8 +41,7 @@ public class Client extends Application {
         stage.setHeight(1000);
         stage.setResizable(true);
         stage.setTitle("Game");
-        Scene game = load("fxml/game.fxml");
-        stage.setScene(game);
+        stage.setScene(load("fxml/game.fxml"));
         stage.centerOnScreen();
     }
 
@@ -58,20 +55,23 @@ public class Client extends Application {
     }
 
     public static void switchOnRooms() {
+        System.out.println("in switch on rooms");
         stage.setWidth(500);
         stage.setHeight(500);
         stage.setResizable(true);
         stage.setTitle("Rooms");
-        Scene rooms = load("fxml/rooms.fxml");
-        stage.setScene(rooms);
+        stage.setScene(load("fxml/rooms.fxml"));
         stage.centerOnScreen();
+        System.out.println("out switch on rooms");
     }
 
     public static void flush() {
         try {
             out.flip();
             socket.write(out);
+            out.clear();
         } catch (IOException e) {
+            e.printStackTrace();
             closeSocket();
             System.out.println("error during flush in main");
             switchOnEnter();

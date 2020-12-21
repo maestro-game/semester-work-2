@@ -13,8 +13,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class Server {
+    private final static AtomicInteger attaching = new AtomicInteger();
 
     public static class Entry {
         private final byte[] data;
@@ -47,7 +49,7 @@ public class Server {
 
     static {
         database.put(new Entry("vadim".getBytes(StandardCharsets.UTF_8)), new User(1, "vadim".getBytes(StandardCharsets.UTF_8), "pass".getBytes(StandardCharsets.UTF_8)));
-        database.put(new Entry("test1".getBytes(StandardCharsets.UTF_8)), new User(1, "test1".getBytes(StandardCharsets.UTF_8), "pass".getBytes(StandardCharsets.UTF_8)));
+        database.put(new Entry("test1".getBytes(StandardCharsets.UTF_8)), new User(2, "test1".getBytes(StandardCharsets.UTF_8), "pass".getBytes(StandardCharsets.UTF_8)));
     }
 
     public final static String HOST = "127.0.0.1";
@@ -80,7 +82,26 @@ public class Server {
         serverSocket.configureBlocking(false);
         serverSocket.register(selector, serverSocket.validOps());
 
-        while (selector.select() > -1) {
+        while (true) {
+            if (attaching.get() != 0) {
+                System.out.println("lobby waiting");
+                try {
+                    synchronized (attaching) {
+                        if (attaching.get() != 0) {
+                            attaching.wait();
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                System.out.println("lobby continued");
+                continue;
+            }
+            try {
+                if (!(selector.select(200) > -1)) break;
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
             Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
             while (iterator.hasNext()) {
                 SelectionKey key = iterator.next();
@@ -157,9 +178,16 @@ public class Server {
         System.out.println("closed");
     }
 
-    public static void attachToLobby(User user, SocketChannel socketChannel, ByteBuffer byteBuffer) throws ClosedChannelException {
-        //TODO check if needs wait/notify to register
-        socketChannel.register(selector, SelectionKey.OP_READ, new Attachment(byteBuffer, user));
+    public static void attachToLobby(User user, SocketChannel socketChannel, ByteBuffer byteBuffer) throws IOException {
+        attaching.incrementAndGet();
+        socketChannel.write(ByteBuffer.wrap(Room.getAllAsBytes()));
+        synchronized (attaching) {
+            socketChannel.register(selector, SelectionKey.OP_READ, new Attachment(byteBuffer, user));
+            if (attaching.decrementAndGet() == 0) {
+                attaching.notify();
+                System.out.println("notified");
+            }
+        }
         System.out.println("accepted to lobby");
     }
 

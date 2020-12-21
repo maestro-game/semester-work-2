@@ -52,6 +52,7 @@ public class ConnectService {
                         enterController.setMessage("Неверный логин или пароль", true);
                         closeSocket();
                         in.clear();
+                        out.clear();
                         break;
                     case room:
                         System.out.println(Arrays.toString(in.array()));
@@ -61,6 +62,7 @@ public class ConnectService {
                         enterController.setMessage("Сервер ответил неправильным сообщением", true);
                         closeSocket();
                         in.clear();
+                        out.clear();
                 }
             } catch (IOException e) {
                 enterController.setMessage("Не удалось подключится к серверу", true);

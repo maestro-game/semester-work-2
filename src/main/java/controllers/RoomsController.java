@@ -16,6 +16,7 @@ import models.SignalCode;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Optional;
 import java.util.ResourceBundle;
@@ -48,6 +49,7 @@ public class RoomsController implements Initializable {
                 out.put(room.id);
             }
 
+            System.out.println(out.position() + " " + out.limit() + " " + Arrays.toString(out.array()));
             Client.flush();
             try {
                 while (socket.read(in) < 1) ;
@@ -69,6 +71,7 @@ public class RoomsController implements Initializable {
                 default:
                     message = "Сервер ответил неправильным сообщением";
             }
+            in.clear();
             if (message != null) {
                 Alert alert = new Alert(Alert.AlertType.WARNING);
                 alert.setTitle("Не удалось подключиться к комнате");
@@ -80,8 +83,7 @@ public class RoomsController implements Initializable {
         listView.setOnKeyPressed(event -> {
             if (event.getCode() == KeyCode.ENTER) {
                 chose.handle(event);
-            }
-            if (event.getCode() == KeyCode.DELETE) {
+            } else if (event.getCode() == KeyCode.DELETE) {
                 closeSocket();
                 Client.switchOnEnter();
             }
@@ -111,6 +113,7 @@ public class RoomsController implements Initializable {
                 } catch (IOException e) {
                     switchOnEnter();
                 }
+                System.out.println("list size " + list.size());
                 listView.setItems(FXCollections.observableList(list));
                 in.clear();
                 return null;
