@@ -52,7 +52,7 @@ public class Server {
         database.put(new Entry("test1".getBytes(StandardCharsets.UTF_8)), new User(2, "test1".getBytes(StandardCharsets.UTF_8), "pass".getBytes(StandardCharsets.UTF_8)));
     }
 
-    public final static String HOST = "127.0.0.1";
+    public final static String HOST = "0.0.0.0";
     public final static int PORT = 9000;
     public final static int BUFFER_SIZE = 1024;
     public final static int CONNECTION_QUEUE = 10;

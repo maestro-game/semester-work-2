@@ -12,8 +12,8 @@ import java.util.Arrays;
 import static main.Client.*;
 
 public class ConnectService {
-    private static final int CONNECTION_TIMEOUT = 3_000;
-    private static final int AUTHORISATION_TIMEOUT = 3_000;
+    private static final int CONNECTION_TIMEOUT = 3_000_0;
+    private static final int AUTHORISATION_TIMEOUT = 3_000_0;
 
     public void connect(ConnectController enterController, String host, int port, String login, String password) {
         new Thread(() -> {

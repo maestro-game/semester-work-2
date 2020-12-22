@@ -15,11 +15,11 @@ import static server.Server.Entry;
 
 public class Room extends Thread {
     private static final double MOVE_PER_TICK = 3;
-    private static final long TICK_DELAY = 50;
+    private static final long TICK_DELAY = 20;
     private static final double COIN_PLUS_PLAYER_RADIUS = 5 + 10;
     private static final double FIELD_WIDTH = 1000;
     private static final double FIELD_HEIGHT = 1000;
-    private static final byte WIN_AMOUNT = 10;
+    private static final byte WIN_AMOUNT = 1;
 
 
     private static byte[] roomsAsBytes = new byte[]{SignalCode.room.getByte(), 0};
@@ -166,21 +166,25 @@ public class Room extends Thread {
                         switch (player.direction) {
                             case 0:
                                 player.y -= MOVE_PER_TICK;
+                                if (player.y < 0) player.y += FIELD_HEIGHT;
                                 ByteBuffer.wrap(bytes).putDouble(player.y);
                                 System.arraycopy(bytes, 0, out, player.order * 25 + 34, 8);
                                 break;
                             case 1:
                                 player.x += MOVE_PER_TICK;
+                                if (player.x > FIELD_WIDTH) player.x -= FIELD_WIDTH;
                                 ByteBuffer.wrap(bytes).putDouble(player.x);
                                 System.arraycopy(bytes, 0, out, player.order * 25 + 26, 8);
                                 break;
                             case 2:
                                 player.y += MOVE_PER_TICK;
+                                if (player.y > FIELD_HEIGHT) player.y -= FIELD_HEIGHT;
                                 ByteBuffer.wrap(bytes).putDouble(player.y);
                                 System.arraycopy(bytes, 0, out, player.order * 25 + 34, 8);
                                 break;
                             case 3:
                                 player.x -= MOVE_PER_TICK;
+                                if (player.x < 0) player.x += FIELD_WIDTH;
                                 ByteBuffer.wrap(bytes).putDouble(player.x);
                                 System.arraycopy(bytes, 0, out, player.order * 25 + 26, 8);
                         }
@@ -218,6 +222,8 @@ public class Room extends Thread {
     }
 
     private void writeClose(Iterator<SelectionKey> iterator) {
+        Room.rooms.remove(id);
+        Room.roomsAsBytes = Room.generateRoomsAsBytes();
         byte[] message;
         if (winner != null) {
             message = new byte[2 + winner.name.length];
