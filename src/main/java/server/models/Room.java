@@ -217,7 +217,7 @@ public class Room extends Thread {
         close = true;
     }
 
-    public void writeClose(Iterator<SelectionKey> iterator) {
+    private void writeClose(Iterator<SelectionKey> iterator) {
         byte[] message;
         if (winner != null) {
             message = new byte[2 + winner.name.length];
@@ -284,7 +284,6 @@ public class Room extends Thread {
             System.arraycopy(player.asBytes(), 0, out, out.length - 25, 25);
             players.put(user.id, player);
         }
-        System.out.println("registering...");
         attaching.incrementAndGet();
         synchronized (players) {
             channel.register(selector, SelectionKey.OP_READ | SelectionKey.OP_WRITE, new Server.Attachment(byteBuffer, player));
@@ -292,7 +291,6 @@ public class Room extends Thread {
                 players.notify();
             }
         }
-        System.out.println("registered");
         return SignalCode.game;
     }
 
@@ -341,5 +339,11 @@ public class Room extends Thread {
 
     public static byte[] getAllAsBytes() {
         return roomsAsBytes;
+    }
+
+    public static void ONLY_FOR_TEST() {
+        roomsAsBytes = new byte[]{SignalCode.room.getByte(), 0};
+        totalLength = 2;
+        rooms.clear();
     }
 }
