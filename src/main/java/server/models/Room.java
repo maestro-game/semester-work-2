@@ -14,8 +14,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static server.Server.Entry;
 
 public class Room extends Thread {
-    private static final double MOVE_PER_TICK = 1;
-    private static final long TICK_DELAY = 100;
+    private static final double MOVE_PER_TICK = 3;
+    private static final long TICK_DELAY = 50;
     private static final double COIN_PLUS_PLAYER_RADIUS = 5 + 10;
     private static final double FIELD_WIDTH = 1000;
     private static final double FIELD_HEIGHT = 1000;
